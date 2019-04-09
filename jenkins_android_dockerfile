@@ -1,0 +1,48 @@
+# 创建带有jenkins和android sdk的镜像
+# 使用方式: docker build -t [image_name] -f ./jenkins_android_dockerfile .
+FROM jenkins/jenkins
+USER root
+
+ENV USR_LOCAL="/usr/local" \
+     ANDROID_HOME="${USR_LOCAL}/AndroidSdk" \
+     SDK_TOOL_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
+
+# 安装android sdk
+# 方式1. 先在宿主主机中下载好 android sdk tools, 放置于 ./tools/ 目录下, 利用 ADD 指令将其内的文件复制到容器指定位置
+# ADD tools ${ANDROID_HOME}/tools
+# 方式2. 在线下载(官网: https://developer.android.com/studio)
+RUN mkdir -p ${ANDROID_HOME} \
+     && cd $ANDROID_HOME \
+     && curl -o sdk.zip $SDK_TOOL_URL \
+     && unzip sdk.zip \
+     && rm sdk.zip
+
+# 此处会显示一个licence,需要输入 y 才能继续执行下载sdk相关包的操作
+# RUN echo y | ${ANDROID_HOME}/tools/bin/sdkmanager "extras;android;m2repository" "extras;google;m2repository" "platform-tools" "platforms;android-28" "sources;android-28" "build-tools;28.0.0"
+RUN echo y | ${ANDROID_HOME}/tools/bin/sdkmanager "platform-tools" "platforms;android-28" "build-tools;28.0.3"
+
+# 设置环境变量: 把 android sdk加入到 PATH 中
+ENV PATH ${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${PATH}
+
+# jenkins本身就依赖于java,镜像已内置了,不需要重新添加
+# RUN mkdir -p ${USR_LOCAL}/java
+# ADD jdk-8u201-linux-x64.tar.gz ${USR_LOCAL}/java
+# RUN ln -s ${USR_LOCAL}/java/jdk1.8.0_201 ${USR_LOCAL}/java/jdk
+# ENV JAVA_HOME ${USR_LOCAL}/java/jdk
+# ENV JRE_HOME ${JAVA_HOME}/jre
+# ENV CLASSPATH .:${JAVA_HOME}/lib:${JRE_HOME}/lib
+# ENV PATH ${JAVA_HOME}/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${PATH}
+
+#RUN >/etc/profile.d/android.sh
+#RUN sed -i '$ a\export ANDROID_HOME="/opt/android-sdk-linux"' /etc/profile.d/android.sh
+#RUN sed -i '$ a\export PATH="$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools:$PATH"' /etc/profile.d/android.sh
+#RUN . /etc/profile
+#RUN apt-get install git-core
+#RUN ( sleep 5 && while [ 1 ]; do sleep 1; echo y; done ) | /opt/android-sdk-linux/tools/android update sdk --no-ui --filter platform-tools,android-24,build-tools-24.0.1,tools,extra-android-support,extra-android-m2repository
+
+RUN chmod -R 755 ${ANDROID_HOME} \
+     && chmod a+rw -R /root/.android
+# RUN dpkg --add-architecture i386
+
+USER jenkins
+ENV JAVA_OPTS="-Xmx8192m"
